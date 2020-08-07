@@ -1,4 +1,6 @@
-package ;
+package;
+
+#if (cpp)
 import cpp.Char;
 import cpp.NativeString;
 import cpp.UInt8;
@@ -72,12 +74,13 @@ class Serial
 			
 		var CommDCBCmd:String = 'baud=$baud parity=N data=8 stop=1';
 		var h:Int = -1;
-		var	cfgSize:DWORD=untyped 0;
-		var cfg:COMMCONFIG;
-		var	tOut:COMMTIMEOUTS;
-		var	oldTimeout:COMMTIMEOUTS;
-			
-		cfgSize=untyped __cpp__('sizeof(cfg)');
+		untyped __cpp__('
+			DWORD cfgSize = 0;
+			COMMCONFIG cfg;	
+			COMMTIMEOUTS tOut;	
+			COMMTIMEOUTS oldTimeout;	
+		');
+		untyped __cpp__('cfgSize = sizeof(cfg)');
 		
 		untyped __cpp__('GetCommConfig(hComm,&cfg,&cfgSize)');
 		untyped __cpp__('SetCommState(hComm, &cfg.dcb)');//ret bool status
@@ -107,8 +110,8 @@ class Serial
 	public function readBytes(length:Int):String
 	{
 		var str:String = "";
-		var nRead:DWORD = untyped 0;		
 		untyped __cpp__('
+			DWORD nRead = 0;
 			char * buffer = (char*) malloc(length+1);
 			ReadFile((HANDLE)hnd, buffer, length, & nRead, 0);
 		');
@@ -119,9 +122,11 @@ class Serial
 	
 	public function readByte():Null<Int>
 	{
-		var nRead:DWORD = untyped 0;
 		var data:Null<Int> =null;
-		untyped __cpp__('ReadFile((HANDLE)hnd, &data, 1, &nRead, 0)');
+		untyped __cpp__('
+			DWORD nRead = 0;
+			ReadFile((HANDLE)hnd, &data, 1, &nRead, 0)
+		');
 		return data;
 	}
 
@@ -132,19 +137,22 @@ class Serial
 	public function writeBytes(length:Int,data:String):Bool
 	{
 		var str:String = "";
-		var written:DWORD=untyped 0;
-		untyped __cpp__('unsigned char * buffer = (unsigned char*)data.c_str(); WriteFile((HANDLE)hnd, buffer, length, &written,0)');
-		(cast written) > 0 ? return true : return false;
+		untyped __cpp__('
+			DWORD written = 0;
+			unsigned char * buffer = (unsigned char*)data.c_str(); 
+			WriteFile((HANDLE)hnd, buffer, length, &written,0)
+		');
+		return untyped __cpp__('written > 0 ? true : false');
 	}
 	
 	public function writeByte(data:Int):Bool
 	{
-		var written:DWORD=untyped 0;
 		untyped __cpp__('
+			DWORD written = 0;
 			unsigned char buffer = (unsigned char)data;
 			WriteFile((HANDLE)hnd, &buffer, 1, &written, 0);
 		');
-		(cast written) > 0 ? return true : return false;
+		return untyped __cpp__('written > 0 ? true : false');
 	}	
 	
 	//===================================================================================
@@ -154,9 +162,10 @@ class Serial
 	public function available():Int
 	{
 		var numBytes:Int = 0;
-		var err:DWORD = untyped 0;
-		
-		untyped __cpp__('COMSTAT stat');
+		untyped __cpp__('
+			DWORD err = 0;
+			COMSTAT stat;
+		');
 		if (hnd != untyped __cpp__('(int)INVALID_HANDLE_VALUE'))
 		{
 			if (untyped __cpp__('!ClearCommError((HANDLE)hnd, &err, &stat)'))
@@ -192,10 +201,12 @@ class Serial
 		var ports:Array<ComDevice> = [];
 			
 		var	hDevInfo:HDEVINFO = untyped NULL;
-		var dataType:DWORD;
-		var actualSize:DWORD;
-		var	DeviceInterfaceData:SP_DEVINFO_DATA;
-		untyped __cpp__('unsigned char dataBuf[MAX_PATH + 1]');
+		untyped __cpp__('
+			DWORD dataType = 0;
+			DWORD actualSize = 0;
+			SP_DEVINFO_DATA DeviceInterfaceData;
+			unsigned char dataBuf[MAX_PATH + 1]
+		');
 
 		hDevInfo = untyped __cpp__('SetupDiGetClassDevs((struct _GUID *)&GUID_SERENUM_BUS_ENUMERATOR,0,0,DIGCF_PRESENT)');
 		if ( hDevInfo!=null )
@@ -242,3 +253,22 @@ class Serial
 	@:native("COMMTIMEOUTS")	extern class COMMTIMEOUTS {}
 	
 	/////////////////////////////////////////////////////////////////////////////////////
+
+#else
+class Serial 
+{
+	public var portName					: String;
+	public var baud						: Int;
+	public var isSetup					: Bool;
+	public var availableDevices			: Any;
+	public function new(portName:String, ?baud:Int = 9600, ?setupImmediately:Bool = true) {trace("Warning! xSerial is only available for the windows hxcpp target!");}	
+	public function setup():Bool { return false;}	
+	public function readBytes(length:Int):String {return null;}
+	public function readByte():Null<Int>{return null;}
+	public function writeBytes(length:Int,data:String):Bool{return false;}
+	public function writeByte(data:Int):Bool{return false;}	
+	public function available():Int{return 0;}
+	public function flush(?flushIn:Bool = false, ?flushOut = false){}
+	static public function enumerateDevices() {}
+}
+#end
